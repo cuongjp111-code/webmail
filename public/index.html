@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Email Manager</title>
+</head>
+<body>
+  <h1>Email Manager (Redis)</h1>
+  <input type="email" id="emailInput" placeholder="Enter email">
+  <button onclick="addEmail()">Add Email</button>
+  <button onclick="getEmail()">Get Random Email</button>
+  <p id="status"></p>
+  <p>Total Emails: <span id="count">0</span></p>
+
+  <script>
+    async function refreshCount() {
+      const res = await fetch('/count');
+      const data = await res.json();
+      document.getElementById('count').innerText = data.count;
+    }
+
+    async function addEmail() {
+      const email = document.getElementById('emailInput').value;
+      const res = await fetch('/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      const data = await res.json();
+      document.getElementById('status').innerText = data.message || data.error;
+      refreshCount();
+    }
+
+    async function getEmail() {
+      const res = await fetch('/get');
+      const data = await res.json();
+      if (data.email) {
+        document.getElementById('status').innerText = "Got email: " + data.email;
+      } else {
+        document.getElementById('status').innerText = data.error;
+      }
+      refreshCount();
+    }
+
+    refreshCount();
+  </script>
+</body>
+</html>
