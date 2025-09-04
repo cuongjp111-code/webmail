@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Quản lý Email Online - Auto Filter</title>
+
+  <!-- 🔍 SEO & Info -->
+  <meta name="description" content="Công cụ quản lý danh sách email online: tự động lọc, lưu, copy nhanh, đồng bộ Firebase.">
+  <meta name="keywords" content="email manager, auto filter, firebase, copy email, quản lý email">
+  <meta name="author" content="CuongJP">
+
+  <!-- 🌐 Favicon -->
+  <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/561/561127.png" type="image/png">
+
+  <!-- 🔥 Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #f0f2f5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      transition: background 0.5s, color 0.5s;
+      color: initial;
+    }
+    body.warning-mode {
+      background: #fff3cd !important;
+    }
+    body.duplicate-mode {
+      background: #8b0000 !important;
+      color: black !important;
+    }
+    textarea, input, button {
+      font-size: 16px;
+      width: 90%;
+      max-width: 340px;
+      margin-top: 10px;
+      padding: 12px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      box-sizing: border-box;
+    }
+    button {
+      background: #007bff;
+      color: white;
+      border: none;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    .input-container {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      width: 90%;
+      max-width: 340px;
+      margin-top: 10px;
+    }
+    #manualCopyButton {
+      max-width: 60px;
+      padding: 10px;
+    }
+    #deleteListButton {
+      background: #dc3545;
+    }
+    #deleteListButton:hover {
+      background: #a71d2a;
+    }
+    #copyButton {
+      font-size: 20px;
+      padding: 18px;
+      width: 95%;
+      max-width: 380px;
+      margin-top: 10px;
+      background: #28a745;
+    }
+    #copyButton:hover {
+      background: #1c7c31;
+    }
+    #clearLogsButton {
+      background: #ffc107;
+      color: black;
+    }
+    #clearLogsButton:hover {
+      background: #e0a800;
+    }
+    #customToast {
+      position: fixed;
+      top: -100px;
+      left: 0;
+      width: 100%;
+      background-color: #343a40;
+      color: white;
+      text-align: center;
+      padding: 16px 10px;
+      font-size: 18px;
+      font-weight: bold;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      z-index: 9999;
+      transition: top 0.5s ease-in-out;
+    }
+    #customToast.show {
+      top: 0;
+    }
+    #customToast.error {
+      background-color: #d93025;
+    }
+    #customToast.success {
+      background-color: #28a745;
+    }
+    #customToast.warning {
+      background-color: #f9c851;
+      color: black;
+    }
+    .dark-mode {
+      background: #121212;
+      color: white;
+    }
+    .dark-mode textarea,
+    .dark-mode input,
+    .dark-mode button {
+      background: #1e1e1e;
+      color: white;
+      border: 1px solid #444;
+    }
+    .dark-mode button:hover {
+      background: #333;
+    }
+    footer {
+      margin-top: 30px;
+      font-size: 13px;
+      color: gray;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+<div id="customToast"></div>
+
+<h3 style="text-align: center; line-height: 1.4;">
+  📨 Quản lý danh sách Email Online<br>
+  (Tự Lọc & Lưu)
+</h3>
+
+<textarea id="emailListInput" placeholder="Dán email, text rác, phân cách bất kỳ (| ; , space ...)"></textarea>
+<button id="addListButton">➕ Thêm Email Vào Danh Sách</button>
+<button id="deleteListButton">🗑️ Xóa Danh Sách Email</button>
+
+<div class="input-container">
+  <input type="text" id="emailOutput" placeholder="Email sẽ xuất hiện ở đây" readonly>
+  <button id="manualCopyButton">📋</button>
+</div>
+
+<p id="count"></p>
+<button id="clearLogsButton">🧹 Clear Log Copy</button>
+
+<button id="copyButton">📋 Lấy & Copy Email</button>
+<p id="output"></p>
+
+<footer>
+  © 2025 Quản lý Email Online - Powered by Firebase & GitHub Pages
+</footer>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyC02FnmTz6z1aysjjLhEl1j8maGLrXVxvg",
+  authDomain: "mail-9ce7c.firebaseapp.com",
+  databaseURL: "https://mail-9ce7c-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "mail-9ce7c",
+  storageBucket: "mail-9ce7c.firebasestorage.app",
+  messagingSenderId: "754733868805",
+  appId: "1:754733868805:web:09519d35c74a0c7007f96c"
+};
+
+// 🔥 Init Firebase
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const emailRef = db.ref('emails');
+const lastCopiedRef = db.ref('lastCopied');
+const copyLogsRef = db.ref('copyLogs');
+
+// 🌙 Auto dark mode
+if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+  document.body.classList.add('dark-mode');
+}
+
+// 📌 TODO: Bổ sung lại toàn bộ script xử lý email (add, copy, delete...)
+// Bạn chỉ cần copy phần script logic cũ vào đây, giữ nguyên firebaseRef, copyText, showToast...
+</script>
+</body>
+</html>
