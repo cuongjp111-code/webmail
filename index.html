@@ -26,10 +26,6 @@
       align-items: center;
       padding: 20px;
       transition: background 0.5s, color 0.5s;
-      color: initial;
-    }
-    body.warning-mode {
-      background: #fff3cd !important;
     }
     body.duplicate-mode {
       background: #8b0000 !important;
@@ -52,9 +48,7 @@
       cursor: pointer;
       transition: background 0.3s;
     }
-    button:hover {
-      background: #0056b3;
-    }
+    button:hover { background: #0056b3; }
     .input-container {
       display: flex;
       gap: 10px;
@@ -63,16 +57,9 @@
       max-width: 340px;
       margin-top: 10px;
     }
-    #manualCopyButton {
-      max-width: 60px;
-      padding: 10px;
-    }
-    #deleteListButton {
-      background: #dc3545;
-    }
-    #deleteListButton:hover {
-      background: #a71d2a;
-    }
+    #manualCopyButton { max-width: 60px; padding: 10px; }
+    #deleteListButton { background: #dc3545; }
+    #deleteListButton:hover { background: #a71d2a; }
     #copyButton {
       font-size: 20px;
       padding: 18px;
@@ -81,16 +68,9 @@
       margin-top: 10px;
       background: #28a745;
     }
-    #copyButton:hover {
-      background: #1c7c31;
-    }
-    #clearLogsButton {
-      background: #ffc107;
-      color: black;
-    }
-    #clearLogsButton:hover {
-      background: #e0a800;
-    }
+    #copyButton:hover { background: #1c7c31; }
+    #clearLogsButton { background: #ffc107; color: black; }
+    #clearLogsButton:hover { background: #e0a800; }
     #customToast {
       position: fixed;
       top: -100px;
@@ -106,23 +86,11 @@
       z-index: 9999;
       transition: top 0.5s ease-in-out;
     }
-    #customToast.show {
-      top: 0;
-    }
-    #customToast.error {
-      background-color: #d93025;
-    }
-    #customToast.success {
-      background-color: #28a745;
-    }
-    #customToast.warning {
-      background-color: #f9c851;
-      color: black;
-    }
-    .dark-mode {
-      background: #121212;
-      color: white;
-    }
+    #customToast.show { top: 0; }
+    #customToast.error { background-color: #d93025; }
+    #customToast.success { background-color: #28a745; }
+    #customToast.warning { background-color: #f9c851; color: black; }
+    .dark-mode { background: #121212; color: white; }
     .dark-mode textarea,
     .dark-mode input,
     .dark-mode button {
@@ -130,9 +98,7 @@
       color: white;
       border: 1px solid #444;
     }
-    .dark-mode button:hover {
-      background: #333;
-    }
+    .dark-mode button:hover { background: #333; }
     footer {
       margin-top: 30px;
       font-size: 13px;
@@ -145,8 +111,7 @@
 <div id="customToast"></div>
 
 <h3 style="text-align: center; line-height: 1.4;">
-  📨 Quản lý danh sách Email Online<br>
-  (Tự Lọc & Lưu)
+  📨 Quản lý danh sách Email Online<br>(Tự Lọc & Lưu)
 </h3>
 
 <textarea id="emailListInput" placeholder="Dán email, text rác, phân cách bất kỳ (| ; , space ...)"></textarea>
@@ -160,9 +125,7 @@
 
 <p id="count"></p>
 <button id="clearLogsButton">🧹 Clear Log Copy</button>
-
 <button id="copyButton">📋 Lấy & Copy Email</button>
-<p id="output"></p>
 
 <footer>
   © 2025 Quản lý Email Online - Powered by Firebase & GitHub Pages
@@ -186,7 +149,7 @@ const emailRef = db.ref('emails');
 const lastCopiedRef = db.ref('lastCopied');
 const copyLogsRef = db.ref('copyLogs');
 
-// 🌙 Auto dark mode
+// 🌙 Dark mode auto
 if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
   document.body.classList.add('dark-mode');
 }
@@ -265,7 +228,7 @@ emailRef.on('value', snapshot => {
   updateCount();
 });
 
-// ===== Events =====
+// ===== Add/Delete =====
 document.getElementById('addListButton').addEventListener('click', () => {
   const input = document.getElementById('emailListInput').value.trim();
   const filteredEmails = extractEmails(input);
@@ -316,29 +279,7 @@ document.getElementById('manualCopyButton').addEventListener('click', () => {
   copyText(email);
 });
 
-// ===== Chống trùng copy =====
-function onCopyEmail(email) {
-  const now = Date.now();
-  const logKey = now + '_' + deviceId;
-  copyLogsRef.child(logKey).set({ email, time: now, deviceId });
-
-  copyLogsRef.orderByChild('time').startAt(now - 15000).once('value').then(snapshot => {
-    const logs = snapshot.val() || {};
-    let trung = false;
-    for (const key in logs) {
-      const log = logs[key];
-      if (log.email === email && log.deviceId !== deviceId) {
-        trung = true;
-        break;
-      }
-    }
-    if (trung) {
-      document.body.classList.add('duplicate-mode');
-      showToast(`⚠️ Email "${email}" đã bị lấy trước đó bởi thiết bị khác!`, "error", 0, true);
-    }
-  });
-}
-
+// ===== Copy with anti-duplicate =====
 document.getElementById('copyButton').addEventListener('click', () => {
   document.body.classList.remove('duplicate-mode');
   hideToast();
@@ -355,28 +296,51 @@ document.getElementById('copyButton').addEventListener('click', () => {
 
   const randomIndex = Math.floor(Math.random() * emailList.length);
   const email = emailList[randomIndex];
-  copyText(email);
+  const now = Date.now();
 
-  emailRef.transaction(currentList => {
-    if (!currentList) return null;
-    const idx = currentList.indexOf(email);
-    if (idx !== -1) {
-      currentList.splice(idx, 1);
-    }
-    return currentList;
-  }, (error, committed, snapshot) => {
-    if (!error && committed) {
-      document.getElementById('emailOutput').value = email;
-      emailList = snapshot.val() || [];
-      updateCount();
-      lastCopiedRef.set({ email, time: Date.now(), deviceId });
-      onCopyEmail(email);
-    }
-    copyButton.disabled = false;
-    copyButton.textContent = "📋 Lấy & Copy Email";
+  // 🔒 Đặt log trước khi xác nhận
+  const logKey = now + '_' + deviceId;
+  copyLogsRef.child(logKey).set({ email, time: now, deviceId }).then(() => {
+    // Kiểm tra xem email đã bị lấy chưa
+    copyLogsRef.orderByChild('time').startAt(now - 5000).once('value').then(snapshot => {
+      const logs = snapshot.val() || {};
+      let trung = false;
+      for (const key in logs) {
+        const log = logs[key];
+        if (log.email === email && log.deviceId !== deviceId) {
+          trung = true;
+          break;
+        }
+      }
+      if (trung) {
+        document.body.classList.add('duplicate-mode');
+        showToast(`⚠️ Email "${email}" đã bị lấy bởi máy khác!`, "error", 0, true);
+        copyButton.disabled = false;
+        copyButton.textContent = "📋 Lấy & Copy Email";
+      } else {
+        // Nếu không trùng thì tiến hành xoá email khỏi list
+        emailRef.transaction(currentList => {
+          if (!currentList) return null;
+          const idx = currentList.indexOf(email);
+          if (idx !== -1) currentList.splice(idx, 1);
+          return currentList;
+        }, (error, committed, snapshot) => {
+          if (!error && committed) {
+            document.getElementById('emailOutput').value = email;
+            emailList = snapshot.val() || [];
+            updateCount();
+            lastCopiedRef.set({ email, time: now, deviceId });
+            copyText(email);
+          }
+          copyButton.disabled = false;
+          copyButton.textContent = "📋 Lấy & Copy Email";
+        });
+      }
+    });
   });
 });
 
+// ===== Clear logs =====
 document.getElementById('clearLogsButton').addEventListener('click', () => {
   copyLogsRef.set(null, (error) => {
     if (error) {
